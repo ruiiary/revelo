@@ -5,11 +5,32 @@ import Link from 'next/link'
 import styled from 'styled-components'
 import AppLayout from '@/components/layout/AppLayout'
 import Icon from '@/components/ui/Icon'
-import { getBooks, addBook, getSentenceCountByBook, type Book, type Language } from '@/lib/storage'
+import { fetchCuratedSentences } from '@/lib/supabase'
+import {
+  getBooks,
+  addBook,
+  getPracticeLogs,
+  getSentenceCountByBook,
+  type Book,
+  type Language,
+} from '@/lib/storage'
+
+// ─── Types ────────────────────────────────────────
+
+interface PracticedSource {
+  key: string
+  title: string
+  author: string
+  language: Language
+  practiceCount: number
+}
+
+// ─── Component ────────────────────────────────────
 
 export default function LibraryPage() {
   const [books, setBooks] = useState<Book[]>([])
   const [sentenceCount, setSentenceCount] = useState<Record<string, number>>({})
+  const [practicedSources, setPracticedSources] = useState<PracticedSource[]>([])
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
@@ -18,6 +39,36 @@ export default function LibraryPage() {
   useEffect(() => {
     setBooks(getBooks())
     setSentenceCount(getSentenceCountByBook())
+
+    // 필사한 큐레이션 문장 출처 집계
+    const logs = getPracticeLogs()
+    if (logs.length === 0) return
+
+    const practicedIds = new Set(logs.map((l) => l.sentence_id))
+
+    fetchCuratedSentences().then((curated) => {
+      const sourceMap = new Map<string, PracticedSource>()
+
+      for (const s of curated) {
+        if (!practicedIds.has(s.id)) continue
+        const key = `${s.source_title}::${s.source_author}`
+        const count = logs.filter((l) => l.sentence_id === s.id).length
+        const existing = sourceMap.get(key)
+        if (existing) {
+          existing.practiceCount += count
+        } else {
+          sourceMap.set(key, {
+            key,
+            title: s.source_title,
+            author: s.source_author,
+            language: s.language,
+            practiceCount: count,
+          })
+        }
+      }
+
+      setPracticedSources(Array.from(sourceMap.values()))
+    })
   }, [])
 
   function handleAdd() {
@@ -29,6 +80,8 @@ export default function LibraryPage() {
     setLang('ko')
     setShowForm(false)
   }
+
+  const isEmpty = books.length === 0 && practicedSources.length === 0
 
   return (
     <AppLayout>
@@ -92,34 +145,70 @@ export default function LibraryPage() {
           </FormCard>
         )}
 
-        {books.length === 0 && !showForm && (
+        {isEmpty && !showForm && (
           <EmptyState>
             <Icon name="books" size={36} style={{ color: 'var(--ink-disabled)' }} />
-            <EmptyText>아직 등록한 책이 없어요</EmptyText>
-            <EmptyHint>+ 버튼을 눌러 읽고 있는 책을 등록해 보세요</EmptyHint>
+            <EmptyText>아직 쌓인 책이 없어요</EmptyText>
+            <EmptyHint>문장을 필사하면 출처 책이 자동으로 쌓여요</EmptyHint>
           </EmptyState>
         )}
 
-        <BookList>
-          {books.map((book) => {
-            const count = sentenceCount[book.id] ?? 0
-            const spineHeight = Math.min(32 + count * 8, 88)
-            return (
-              <BookItem key={book.id} href={`/library/${book.id}`}>
-                <BookSpineWrap>
-                  <BookSpine $language={book.language} $height={spineHeight} />
-                </BookSpineWrap>
-                <BookInfo>
-                  <BookTitle>{book.title}</BookTitle>
-                  <BookAuthor>{book.author}</BookAuthor>
-                  <BookSentenceCount>{count > 0 ? `${count}문장` : '문장 없음'}</BookSentenceCount>
-                </BookInfo>
-                <LangTag>{book.language === 'ko' ? '한국어' : 'English'}</LangTag>
-                <Icon name="chevron-right" size={16} style={{ color: 'var(--ink-disabled)' }} />
-              </BookItem>
-            )
-          })}
-        </BookList>
+        {/* 필사한 큐레이션 출처 */}
+        {practicedSources.length > 0 && (
+          <Section>
+            <SectionTitle>필사한 문장 출처</SectionTitle>
+            <BookList>
+              {practicedSources.map((src) => {
+                const spineHeight = Math.min(32 + src.practiceCount * 10, 88)
+                return (
+                  <CuratedBookItem key={src.key}>
+                    <BookSpineWrap>
+                      <BookSpine $language={src.language} $height={spineHeight} />
+                    </BookSpineWrap>
+                    <BookInfo>
+                      <BookTitleRow>
+                        <BookTitle>{src.title}</BookTitle>
+                        <CuratedBadge>큐레이션</CuratedBadge>
+                      </BookTitleRow>
+                      <BookAuthor>{src.author}</BookAuthor>
+                      <BookSentenceCount>{src.practiceCount}회 필사</BookSentenceCount>
+                    </BookInfo>
+                    <LangTag>{src.language === 'ko' ? '한국어' : 'English'}</LangTag>
+                  </CuratedBookItem>
+                )
+              })}
+            </BookList>
+          </Section>
+        )}
+
+        {/* 직접 등록한 책 */}
+        {books.length > 0 && (
+          <Section>
+            <SectionTitle>내가 등록한 책</SectionTitle>
+            <BookList>
+              {books.map((book) => {
+                const count = sentenceCount[book.id] ?? 0
+                const spineHeight = Math.min(32 + count * 8, 88)
+                return (
+                  <BookItem key={book.id} href={`/library/${book.id}`}>
+                    <BookSpineWrap>
+                      <BookSpine $language={book.language} $height={spineHeight} />
+                    </BookSpineWrap>
+                    <BookInfo>
+                      <BookTitle>{book.title}</BookTitle>
+                      <BookAuthor>{book.author}</BookAuthor>
+                      <BookSentenceCount>
+                        {count > 0 ? `${count}문장` : '문장 없음'}
+                      </BookSentenceCount>
+                    </BookInfo>
+                    <LangTag>{book.language === 'ko' ? '한국어' : 'English'}</LangTag>
+                    <Icon name="chevron-right" size={16} style={{ color: 'var(--ink-disabled)' }} />
+                  </BookItem>
+                )
+              })}
+            </BookList>
+          </Section>
+        )}
       </Page>
     </AppLayout>
   )
@@ -282,6 +371,21 @@ const EmptyText = styled.p`
 const EmptyHint = styled.p`
   font-size: 13px;
   color: var(--ink-disabled);
+  text-align: center;
+  line-height: 1.6;
+`
+
+const Section = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const SectionTitle = styled.h2`
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.04em;
 `
 
 const BookList = styled.div`
@@ -301,8 +405,18 @@ const BookItem = styled(Link)`
   transition: border-color var(--transition-base);
 
   &:hover {
-    border-color: var(--bg-subtle);
+    border-color: var(--accent-sand);
   }
+`
+
+const CuratedBookItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  border: 1px solid var(--bg-muted);
 `
 
 const BookSpineWrap = styled.div`
@@ -330,6 +444,12 @@ const BookInfo = styled.div`
   min-width: 0;
 `
 
+const BookTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`
+
 const BookTitle = styled.span`
   font-size: 14px;
   font-weight: 600;
@@ -337,6 +457,17 @@ const BookTitle = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+`
+
+const CuratedBadge = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-sand);
+  background: rgba(201, 169, 110, 0.12);
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
 `
 
 const BookAuthor = styled.span`

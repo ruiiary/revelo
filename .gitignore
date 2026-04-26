@@ -50,4 +50,5 @@ docs
 CLAUDE.md
 AGENTS.md
 supabase/
+supabase
 supabase/.env*
