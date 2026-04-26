@@ -5,7 +5,13 @@ import styled from 'styled-components'
 import AppLayout from '@/components/layout/AppLayout'
 import SentenceCard from '@/components/ui/SentenceCard'
 import { fetchCuratedSentences, type CuratedSentence } from '@/lib/supabase'
-import { getLanguage, getStreak, getTotalStats, type Language } from '@/lib/storage'
+import {
+  getLanguage,
+  getStreak,
+  getTotalStats,
+  getPracticeLogs,
+  type Language,
+} from '@/lib/storage'
 
 const DAYS = ['일', '월', '화', '수', '목', '금', '토']
 const LANG_LABEL: Record<Language, string> = {
@@ -28,8 +34,10 @@ export default function DashboardPage() {
     setStreak(currentStreak)
     setStats(getTotalStats())
 
+    const practicedIds = new Set(getPracticeLogs().map((l) => l.sentence_id))
+
     fetchCuratedSentences(lang ?? undefined)
-      .then(setSentences)
+      .then((data) => setSentences(data.filter((s) => !practicedIds.has(s.id))))
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
@@ -104,9 +112,9 @@ export default function DashboardPage() {
 
           {!loading && !error && sentences.length === 0 && (
             <EmptyMsg>
-              {language
-                ? '아직 큐레이션 문장이 없어요.'
-                : '필사 탭에서 언어를 선택하면 맞춤 문장을 보여드려요.'}
+              {!language
+                ? '필사 탭에서 언어를 선택하면 맞춤 문장을 보여드려요.'
+                : '준비된 문장을 모두 필사했어요. 직접 문장을 입력해서 필사해 보세요.'}
             </EmptyMsg>
           )}
 

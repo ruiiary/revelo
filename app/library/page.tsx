@@ -17,37 +17,74 @@ import {
 
 // ─── Types ────────────────────────────────────────
 
-interface PracticedSource {
-  key: string
+interface ShelfBook {
+  id: string
   title: string
   author: string
   language: Language
-  practiceCount: number
+  practiceCount: number // 필사 횟수 (두께 기준)
+  sentenceCount: number // 저장 문장 수
+  isLocal: boolean // true = 직접 등록, false = 큐레이션 출처
+  color: string
+}
+
+// 책 커버 팔레트 (earthy tones)
+const BOOK_COLORS: Record<Language, string[]> = {
+  en: ['#c8b8a2', '#c8c4a8', '#c8b0a0', '#b8c4c8', '#c4b8c8'],
+  ko: ['#a8bcc8', '#b8c8a8', '#c8b8b8', '#a8c8b8', '#b8b8c8'],
+}
+
+function pickColor(language: Language, index: number): string {
+  const palette = BOOK_COLORS[language]
+  return palette[index % palette.length]
 }
 
 // ─── Component ────────────────────────────────────
 
 export default function LibraryPage() {
-  const [books, setBooks] = useState<Book[]>([])
-  const [sentenceCount, setSentenceCount] = useState<Record<string, number>>({})
-  const [practicedSources, setPracticedSources] = useState<PracticedSource[]>([])
+  const [shelfBooks, setShelfBooks] = useState<ShelfBook[]>([])
+  const [localBooks, setLocalBooks] = useState<Book[]>([])
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [lang, setLang] = useState<Language>('ko')
+  const [filter, setFilter] = useState<'all' | 'en' | 'ko'>('all')
 
   useEffect(() => {
-    setBooks(getBooks())
-    setSentenceCount(getSentenceCountByBook())
+    const books = getBooks()
+    setLocalBooks(books)
 
-    // 필사한 큐레이션 문장 출처 집계
+    const sentenceCount = getSentenceCountByBook()
     const logs = getPracticeLogs()
-    if (logs.length === 0) return
+
+    // 직접 등록한 책 (practice_logs 중 해당 sentence가 로컬 book에 속한 것 집계)
+    const localShelf: ShelfBook[] = books.map((book, i) => {
+      const count = sentenceCount[book.id] ?? 0
+      const practiced = logs.filter((l) => {
+        // sentence_id가 이 책 소속인지는 별도 조회 필요 — 근사값으로 sentenceCount 사용
+        return false
+      }).length
+      return {
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        language: book.language,
+        practiceCount: count,
+        sentenceCount: count,
+        isLocal: true,
+        color: pickColor(book.language, i),
+      }
+    })
+
+    if (logs.length === 0) {
+      setShelfBooks(localShelf)
+      return
+    }
 
     const practicedIds = new Set(logs.map((l) => l.sentence_id))
 
     fetchCuratedSentences().then((curated) => {
-      const sourceMap = new Map<string, PracticedSource>()
+      const sourceMap = new Map<string, Omit<ShelfBook, 'color'>>()
 
       for (const s of curated) {
         if (!practicedIds.has(s.id)) continue
@@ -56,36 +93,65 @@ export default function LibraryPage() {
         const existing = sourceMap.get(key)
         if (existing) {
           existing.practiceCount += count
+          existing.sentenceCount += 1
         } else {
           sourceMap.set(key, {
-            key,
+            id: key,
             title: s.source_title,
             author: s.source_author,
             language: s.language,
             practiceCount: count,
+            sentenceCount: 1,
+            isLocal: false,
           })
         }
       }
 
-      setPracticedSources(Array.from(sourceMap.values()))
+      const curatedShelf: ShelfBook[] = Array.from(sourceMap.values()).map((src, i) => ({
+        ...src,
+        color: pickColor(src.language, i),
+      }))
+
+      // 직접 등록 책과 합쳐서 필사 횟수 내림차순 정렬
+      const all = [...localShelf, ...curatedShelf].sort((a, b) => b.practiceCount - a.practiceCount)
+      setShelfBooks(all)
     })
   }, [])
 
   function handleAdd() {
     if (!title.trim() || !author.trim()) return
     const book = addBook({ title: title.trim(), author: author.trim(), language: lang })
-    setBooks((prev) => [book, ...prev])
+    setLocalBooks((prev) => [book, ...prev])
+    setShelfBooks((prev) => [
+      {
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        language: book.language,
+        practiceCount: 0,
+        sentenceCount: 0,
+        isLocal: true,
+        color: pickColor(book.language, prev.length),
+      },
+      ...prev,
+    ])
     setTitle('')
     setAuthor('')
     setLang('ko')
     setShowForm(false)
   }
 
-  const isEmpty = books.length === 0 && practicedSources.length === 0
+  const filteredBooks = shelfBooks.filter((b) => filter === 'all' || b.language === filter)
+
+  // 두께: 필사 횟수 기반 (min 12px, 횟수당 +5px, max 38px)
+  const getWidth = (count: number) => Math.min(12 + count * 5, 38)
+  // 높이: 필사 횟수 기반 (min 40px, 횟수당 +6px, max 96px)
+  const getHeight = (count: number) => Math.min(40 + count * 6, 96)
 
   return (
     <AppLayout>
       <Page>
+        {/* 헤더 */}
         <Header>
           <PageTitle>내 책장</PageTitle>
           <AddButton onClick={() => setShowForm(true)}>
@@ -93,6 +159,16 @@ export default function LibraryPage() {
           </AddButton>
         </Header>
 
+        {/* 필터 탭 */}
+        <FilterRow>
+          {(['all', 'en', 'ko'] as const).map((f) => (
+            <FilterTag key={f} $active={filter === f} onClick={() => setFilter(f)}>
+              {f === 'all' ? '전체' : f === 'en' ? '영어' : '한국어'}
+            </FilterTag>
+          ))}
+        </FilterRow>
+
+        {/* 책 등록 폼 */}
         {showForm && (
           <FormCard>
             <FormTitle>책 등록</FormTitle>
@@ -145,69 +221,72 @@ export default function LibraryPage() {
           </FormCard>
         )}
 
-        {isEmpty && !showForm && (
+        {/* 빈 상태 */}
+        {filteredBooks.length === 0 && !showForm && (
           <EmptyState>
             <Icon name="books" size={36} style={{ color: 'var(--ink-disabled)' }} />
             <EmptyText>아직 쌓인 책이 없어요</EmptyText>
-            <EmptyHint>문장을 필사하면 출처 책이 자동으로 쌓여요</EmptyHint>
+            <EmptyHint>문장을 필사하면 출처 책이 자동으로 책장에 쌓여요</EmptyHint>
           </EmptyState>
         )}
 
-        {/* 필사한 큐레이션 출처 */}
-        {practicedSources.length > 0 && (
-          <Section>
-            <SectionTitle>필사한 문장 출처</SectionTitle>
-            <BookList>
-              {practicedSources.map((src) => {
-                const spineHeight = Math.min(32 + src.practiceCount * 10, 88)
-                return (
-                  <CuratedBookItem key={src.key}>
-                    <BookSpineWrap>
-                      <BookSpine $language={src.language} $height={spineHeight} />
-                    </BookSpineWrap>
-                    <BookInfo>
-                      <BookTitleRow>
-                        <BookTitle>{src.title}</BookTitle>
-                        <CuratedBadge>큐레이션</CuratedBadge>
-                      </BookTitleRow>
-                      <BookAuthor>{src.author}</BookAuthor>
-                      <BookSentenceCount>{src.practiceCount}회 필사</BookSentenceCount>
-                    </BookInfo>
-                    <LangTag>{src.language === 'ko' ? '한국어' : 'English'}</LangTag>
-                  </CuratedBookItem>
-                )
-              })}
-            </BookList>
-          </Section>
-        )}
+        {filteredBooks.length > 0 && (
+          <>
+            {/* 시각적 책장 */}
+            <ShelfCard>
+              <ShelfLabel>책 두께 = 필사 횟수</ShelfLabel>
+              <Shelf>
+                {filteredBooks.map((book) => (
+                  <SpineWrap key={book.id}>
+                    <BookRect
+                      $width={getWidth(book.practiceCount)}
+                      $height={getHeight(book.practiceCount)}
+                      $color={book.color}
+                    />
+                    <SpineTitle>{book.title}</SpineTitle>
+                  </SpineWrap>
+                ))}
+              </Shelf>
+            </ShelfCard>
 
-        {/* 직접 등록한 책 */}
-        {books.length > 0 && (
-          <Section>
-            <SectionTitle>내가 등록한 책</SectionTitle>
+            {/* 책 목록 */}
+            <BookCount>{filteredBooks.length}권</BookCount>
             <BookList>
-              {books.map((book) => {
-                const count = sentenceCount[book.id] ?? 0
-                const spineHeight = Math.min(32 + count * 8, 88)
-                return (
-                  <BookItem key={book.id} href={`/library/${book.id}`}>
-                    <BookSpineWrap>
-                      <BookSpine $language={book.language} $height={spineHeight} />
-                    </BookSpineWrap>
+              {filteredBooks.map((book) => {
+                const inner = (
+                  <>
+                    <BookCover $color={book.color} />
                     <BookInfo>
                       <BookTitle>{book.title}</BookTitle>
-                      <BookAuthor>{book.author}</BookAuthor>
-                      <BookSentenceCount>
-                        {count > 0 ? `${count}문장` : '문장 없음'}
-                      </BookSentenceCount>
+                      <BookMeta>
+                        {book.author} · {book.language === 'ko' ? '한국어' : 'English'}
+                      </BookMeta>
+                      <BookPracticeCount>
+                        {book.practiceCount > 0
+                          ? `${book.practiceCount}회 필사했어요`
+                          : '아직 필사하지 않았어요'}
+                      </BookPracticeCount>
                     </BookInfo>
-                    <LangTag>{book.language === 'ko' ? '한국어' : 'English'}</LangTag>
-                    <Icon name="chevron-right" size={16} style={{ color: 'var(--ink-disabled)' }} />
-                  </BookItem>
+                    <Icon
+                      name="chevron-right"
+                      size={14}
+                      style={{ color: 'var(--ink-disabled)', flexShrink: 0 }}
+                    />
+                  </>
+                )
+
+                const href = book.isLocal
+                  ? `/library/${book.id}`
+                  : `/library/source?title=${encodeURIComponent(book.title)}&author=${encodeURIComponent(book.author)}`
+
+                return (
+                  <BookItemLink key={book.id} href={href}>
+                    {inner}
+                  </BookItemLink>
                 )
               })}
             </BookList>
-          </Section>
+          </>
         )}
       </Page>
     </AppLayout>
@@ -220,7 +299,7 @@ const Page = styled.div`
   padding: 20px 20px 32px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 `
 
 const Header = styled.div`
@@ -250,6 +329,22 @@ const AddButton = styled.button`
   &:hover {
     opacity: 0.8;
   }
+`
+
+const FilterRow = styled.div`
+  display: flex;
+  gap: 6px;
+`
+
+const FilterTag = styled.button<{ $active: boolean }>`
+  padding: 5px 14px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 400)};
+  background: ${({ $active }) => ($active ? 'var(--ink-primary)' : 'var(--bg-surface)')};
+  color: ${({ $active }) => ($active ? 'var(--bg-surface)' : 'var(--ink-tertiary)')};
+  border: 1px solid ${({ $active }) => ($active ? 'var(--ink-primary)' : 'var(--bg-muted)')};
+  transition: all var(--transition-base);
 `
 
 const FormCard = styled.div`
@@ -294,7 +389,6 @@ const Input = styled.input`
   &::placeholder {
     color: var(--ink-disabled);
   }
-
   &:focus {
     border-color: var(--accent-sand);
     background: var(--bg-surface);
@@ -348,7 +442,6 @@ const SubmitButton = styled.button`
     opacity: 0.4;
     cursor: default;
   }
-
   &:not(:disabled):hover {
     opacity: 0.8;
   }
@@ -375,17 +468,68 @@ const EmptyHint = styled.p`
   line-height: 1.6;
 `
 
-const Section = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* ── 시각적 책장 ── */
+
+const ShelfCard = styled.div`
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: 16px 16px 0;
+  border: 1px solid var(--bg-muted);
+  overflow-x: auto;
 `
 
-const SectionTitle = styled.h2`
+const ShelfLabel = styled.p`
+  font-size: 10px;
+  color: var(--ink-disabled);
+  margin-bottom: 12px;
+  letter-spacing: 0.04em;
+`
+
+const Shelf = styled.div`
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding-bottom: 0;
+  border-bottom: 3px solid var(--bg-muted);
+  min-height: 108px;
+`
+
+const SpineWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+`
+
+const BookRect = styled.div<{ $width: number; $height: number; $color: string }>`
+  width: ${({ $width }) => $width}px;
+  height: ${({ $height }) => $height}px;
+  background: ${({ $color }) => $color};
+  border-radius: 3px 2px 2px 3px;
+  border-left: 2px solid rgba(0, 0, 0, 0.07);
+  transition:
+    width 0.3s ease,
+    height 0.3s ease;
+  flex-shrink: 0;
+`
+
+const SpineTitle = styled.div`
+  font-size: 7px;
+  color: var(--ink-tertiary);
+  text-align: center;
+  width: 36px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+`
+
+/* ── 책 목록 ── */
+
+const BookCount = styled.p`
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-tertiary);
-  letter-spacing: 0.04em;
 `
 
 const BookList = styled.div`
@@ -394,46 +538,31 @@ const BookList = styled.div`
   gap: 8px;
 `
 
-const BookItem = styled(Link)`
+const bookItemBase = `
   display: flex;
   align-items: center;
   gap: 12px;
   background: var(--bg-surface);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid var(--bg-muted);
-  transition: border-color var(--transition-base);
+`
 
+const BookItemLink = styled(Link)`
+  ${bookItemBase}
+  transition: border-color var(--transition-base);
   &:hover {
     border-color: var(--accent-sand);
   }
 `
 
-const CuratedBookItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--bg-surface);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  border: 1px solid var(--bg-muted);
-`
-
-const BookSpineWrap = styled.div`
-  width: 14px;
-  height: 88px;
-  display: flex;
-  align-items: flex-end;
+const BookCover = styled.div<{ $color: string }>`
+  width: 34px;
+  height: 48px;
+  background: ${({ $color }) => $color};
+  border-radius: 3px 2px 2px 3px;
+  border-left: 2px solid rgba(0, 0, 0, 0.08);
   flex-shrink: 0;
-`
-
-const BookSpine = styled.div<{ $language: Language; $height: number }>`
-  width: 6px;
-  height: ${({ $height }) => $height}px;
-  border-radius: 3px;
-  background: ${({ $language }) =>
-    $language === 'ko' ? 'var(--accent-sage)' : 'var(--accent-sand)'};
-  transition: height 0.3s ease;
 `
 
 const BookInfo = styled.div`
@@ -444,14 +573,8 @@ const BookInfo = styled.div`
   min-width: 0;
 `
 
-const BookTitleRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-`
-
 const BookTitle = styled.span`
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-primary);
   white-space: nowrap;
@@ -459,30 +582,12 @@ const BookTitle = styled.span`
   text-overflow: ellipsis;
 `
 
-const CuratedBadge = styled.span`
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--accent-sand);
-  background: rgba(201, 169, 110, 0.12);
-  padding: 2px 6px;
-  border-radius: var(--radius-full);
-  white-space: nowrap;
-  flex-shrink: 0;
-`
-
-const BookAuthor = styled.span`
-  font-size: 12px;
+const BookMeta = styled.span`
+  font-size: 11px;
   color: var(--ink-tertiary);
 `
 
-const BookSentenceCount = styled.span`
+const BookPracticeCount = styled.span`
   font-size: 11px;
   color: var(--ink-disabled);
-  margin-top: 2px;
-`
-
-const LangTag = styled.span`
-  font-size: 11px;
-  color: var(--ink-tertiary);
-  white-space: nowrap;
 `

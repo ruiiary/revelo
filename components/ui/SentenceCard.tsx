@@ -1,7 +1,10 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import styled, { css } from 'styled-components'
+import styled from 'styled-components'
+import Icon from '@/components/ui/Icon'
+import { addScrap, removeScrap, isScrapped } from '@/lib/storage'
 import type { CuratedSentence } from '@/lib/supabase'
 
 interface SentenceCardProps {
@@ -11,11 +14,32 @@ interface SentenceCardProps {
 
 export default function SentenceCard({ sentence, featured = false }: SentenceCardProps) {
   const practiceHref = `/practice?sentenceId=${sentence.id}`
+  const [scrapped, setScrapped] = useState(false)
+
+  useEffect(() => {
+    setScrapped(isScrapped(sentence.id))
+  }, [sentence.id])
+
+  function handleScrap(e: React.MouseEvent) {
+    e.preventDefault()
+    if (scrapped) {
+      removeScrap(sentence.id)
+      setScrapped(false)
+    } else {
+      addScrap(sentence.id)
+      setScrapped(true)
+    }
+  }
 
   if (featured) {
     return (
       <FeaturedCard>
-        <FeaturedTag>오늘의 추천</FeaturedTag>
+        <FeaturedTop>
+          <FeaturedTag>오늘의 추천</FeaturedTag>
+          <ScrapButton onClick={handleScrap} $scrapped={scrapped} $dark>
+            <Icon name="bookmark" size={18} />
+          </ScrapButton>
+        </FeaturedTop>
         <FeaturedQuote>&ldquo;{sentence.content}&rdquo;</FeaturedQuote>
         <FeaturedMeta>
           <FeaturedBook>{sentence.source_title}</FeaturedBook>
@@ -34,7 +58,12 @@ export default function SentenceCard({ sentence, featured = false }: SentenceCar
           <CardBook>{sentence.source_title}</CardBook>
           <CardAuthor>{sentence.source_author}</CardAuthor>
         </CardMeta>
-        <CardAction href={practiceHref}>필사</CardAction>
+        <CardActions>
+          <ScrapButton onClick={handleScrap} $scrapped={scrapped} $dark={false}>
+            <Icon name="bookmark" size={16} />
+          </ScrapButton>
+          <CardAction href={practiceHref}>필사</CardAction>
+        </CardActions>
       </CardFooter>
     </RegularCard>
   )
@@ -50,6 +79,12 @@ const FeaturedCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
+`
+
+const FeaturedTop = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 `
 
 const FeaturedTag = styled.span`
@@ -150,6 +185,30 @@ const CardAuthor = styled.span`
   font-size: 12px;
   font-weight: 500;
   color: var(--ink-secondary);
+`
+
+const CardActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+`
+
+const ScrapButton = styled.button<{ $scrapped: boolean; $dark: boolean }>`
+  display: flex;
+  align-items: center;
+  color: ${({ $scrapped, $dark }) =>
+    $scrapped ? 'var(--accent-sand)' : $dark ? 'rgba(255,255,255,0.4)' : 'var(--ink-disabled)'};
+  transition: color var(--transition-base);
+
+  svg {
+    fill: ${({ $scrapped }) => ($scrapped ? 'var(--accent-sand)' : 'none')};
+    transition: fill var(--transition-base);
+  }
+
+  &:hover {
+    color: var(--accent-sand);
+  }
 `
 
 const CardAction = styled(Link)`
