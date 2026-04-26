@@ -10,6 +10,10 @@ import {
   getSentenceById,
   addSentence,
   addPracticeLog,
+  addScrap,
+  removeScrap,
+  isScrapped,
+  getScraps,
   setLanguage,
   type Language,
 } from '@/lib/storage'
@@ -50,6 +54,7 @@ function PracticeContent() {
   const [step, setStep] = useState<Step>(sentenceId ? 'read' : 'language-select')
   const [language, setLang] = useState<Language>('en')
   const [sentenceList, setSentenceList] = useState<CuratedSentence[]>([])
+  const [scrapTimeMap, setScrapTimeMap] = useState<Map<string, string>>(new Map())
   const [sentence, setSentence] = useState<PracticeSentence | null>(null)
   const [userInput, setUserInput] = useState('')
   const [correct, setCorrect] = useState(false)
@@ -60,6 +65,7 @@ function PracticeContent() {
   const [customContent, setCustomContent] = useState('')
   const [customSourceTitle, setCustomSourceTitle] = useState('')
   const [customSourceAuthor, setCustomSourceAuthor] = useState('')
+  const [scrapped, setScrapped] = useState(false)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -108,8 +114,25 @@ function PracticeContent() {
     setLang(lang)
     setLanguage(lang)
     setLoading(true)
+
+    // 스크랩 시간 맵 (sentence_id → created_at)
+    const scraps = getScraps()
+    const timeMap = new Map(scraps.map((s) => [s.sentence_id, s.created_at]))
+    setScrapTimeMap(timeMap)
+
     fetchCuratedSentences(lang)
-      .then(setSentenceList)
+      .then((list) => {
+        // 스크랩된 문장을 최근 스크랩 순으로 상단 배치, 나머지는 원래 순서
+        const sorted = [...list].sort((a, b) => {
+          const ta = timeMap.get(a.id)
+          const tb = timeMap.get(b.id)
+          if (ta && tb) return tb.localeCompare(ta) // 둘 다 스크랩 → 최신순
+          if (ta) return -1 // a만 스크랩 → a 앞
+          if (tb) return 1 // b만 스크랩 → b 앞
+          return 0 // 둘 다 비스크랩 → 원래 순서
+        })
+        setSentenceList(sorted)
+      })
       .finally(() => setLoading(false))
     setStep('sentence-select')
   }
@@ -164,8 +187,20 @@ function PracticeContent() {
     const acc = calcAccuracy(sentence.content, userInput)
     setCorrect(result)
     setAccuracy(acc)
+    setScrapped(isScrapped(sentence.id))
     addPracticeLog({ sentence_id: sentence.id, user_input: userInput, is_correct: result })
     setStep('compare')
+  }
+
+  function handleScrap() {
+    if (!sentence) return
+    if (scrapped) {
+      removeScrap(sentence.id)
+      setScrapped(false)
+    } else {
+      addScrap(sentence.id)
+      setScrapped(true)
+    }
   }
 
   function handleRetry() {
@@ -282,14 +317,24 @@ function PracticeContent() {
 
           {sentenceList.length === 0 && <EmptyMsg>불러올 문장이 없어요</EmptyMsg>}
           <SelectList>
-            {sentenceList.map((s) => (
-              <SelectItem key={s.id} onClick={() => handleSentenceSelect(s)}>
-                <SelectQuote>&ldquo;{s.content}&rdquo;</SelectQuote>
-                <SelectMeta>
-                  {s.source_author} · {s.source_title}
-                </SelectMeta>
-              </SelectItem>
-            ))}
+            {sentenceList.map((s) => {
+              const isScrappedItem = scrapTimeMap.has(s.id)
+              return (
+                <SelectItem key={s.id} onClick={() => handleSentenceSelect(s)}>
+                  <SelectQuote>&ldquo;{s.content}&rdquo;</SelectQuote>
+                  <SelectItemFooter>
+                    <SelectMeta>
+                      {s.source_author} · {s.source_title}
+                    </SelectMeta>
+                    {isScrappedItem && (
+                      <SelectBookmark>
+                        <Icon name="bookmark" size={13} />
+                      </SelectBookmark>
+                    )}
+                  </SelectItemFooter>
+                </SelectItem>
+              )
+            })}
           </SelectList>
         </Screen>
       </AppLayout>
@@ -380,9 +425,14 @@ function PracticeContent() {
               <UserText>{userInput}</UserText>
             </CompareBlock>
 
-            <ResultBadge $correct={correct}>
-              {correct ? '그대로 써냈어요' : `${accuracy}% 일치 — 다시 한번 써볼까요?`}
-            </ResultBadge>
+            <ResultRow>
+              <ResultBadge $correct={correct}>
+                {correct ? '그대로 써냈어요' : `${accuracy}% 일치 — 다시 한번 써볼까요?`}
+              </ResultBadge>
+              <ScrapButton onClick={handleScrap} $scrapped={scrapped}>
+                <Icon name="bookmark" size={20} />
+              </ScrapButton>
+            </ResultRow>
           </StepArea>
         )}
 
@@ -648,7 +698,14 @@ const UserText = styled.p`
   word-break: keep-all;
 `
 
+const ResultRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`
+
 const ResultBadge = styled.div<{ $correct: boolean }>`
+  flex: 1;
   padding: 12px 16px;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -657,6 +714,32 @@ const ResultBadge = styled.div<{ $correct: boolean }>`
   background: ${({ $correct }) =>
     $correct ? 'rgba(90, 143, 106, 0.12)' : 'rgba(192, 97, 74, 0.08)'};
   color: ${({ $correct }) => ($correct ? 'var(--state-success)' : 'var(--state-error)')};
+`
+
+const ScrapButton = styled.button<{ $scrapped: boolean }>`
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--bg-muted);
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: ${({ $scrapped }) => ($scrapped ? 'var(--accent-sand)' : 'var(--ink-disabled)')};
+  transition:
+    color var(--transition-base),
+    border-color var(--transition-base);
+
+  svg {
+    fill: ${({ $scrapped }) => ($scrapped ? 'var(--accent-sand)' : 'none')};
+    transition: fill var(--transition-base);
+  }
+
+  &:hover {
+    color: var(--accent-sand);
+    border-color: var(--accent-sand);
+  }
 `
 
 const CompleteIcon = styled.div`
@@ -824,9 +907,27 @@ const SelectQuote = styled.p`
   overflow: hidden;
 `
 
+const SelectItemFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
 const SelectMeta = styled.span`
   font-size: 11px;
   color: var(--ink-tertiary);
+`
+
+const SelectBookmark = styled.span`
+  color: var(--accent-sand);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+
+  svg {
+    fill: var(--accent-sand);
+  }
 `
 
 const EmptyMsg = styled.p`
