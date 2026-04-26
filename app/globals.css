@@ -1,40 +1,67 @@
+/* ─── Design Tokens ─────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Backgrounds */
+  --bg-base: #f5f2ed;
+  --bg-surface: #ffffff;
+  --bg-subtle: #ede9e2;
+  --bg-muted: #e4e0d8;
+
+  /* Ink */
+  --ink-primary: #1a1917;
+  --ink-secondary: #5c5854;
+  --ink-tertiary: #9c9893;
+  --ink-disabled: #c8c5c0;
+
+  /* Accent */
+  --accent-sand: #c9a96e;
+  --accent-sand-light: #e8d9be;
+  --accent-sage: #7a9e87;
+  --accent-dusk: #9b8ea8;
+
+  /* State */
+  --state-success: #5a8f6a;
+  --state-error: #c0614a;
+  --state-warning: #c9994e;
+
+  /* Fonts */
+  --font-ui: var(--font-noto-sans), 'Noto Sans KR', sans-serif;
+  --font-sentence:
+    var(--font-playfair), 'Playfair Display', var(--font-noto-serif), 'Noto Serif KR', serif;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  /* Transition */
+  --transition-base: 160ms ease;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Reset ─────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
 html {
   height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--ink-primary);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+  overflow-x: hidden;
 }
 
 a {
@@ -42,8 +69,19 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+input,
+textarea {
+  font-family: inherit;
+}
+
+img,
+svg {
+  display: block;
 }
