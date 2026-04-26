@@ -1,9 +1,16 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+let _client: SupabaseClient | null = null
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+function getClient(): SupabaseClient {
+  if (!_client) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !key) throw new Error('Supabase environment variables are not set.')
+    _client = createClient(url, key)
+  }
+  return _client
+}
 
 // ─── Types ────────────────────────────────────────
 
@@ -19,7 +26,7 @@ export interface CuratedSentence {
 // ─── Queries ──────────────────────────────────────
 
 export async function fetchCuratedSentences(language?: 'en' | 'ko') {
-  let query = supabase
+  let query = getClient()
     .from('sentences')
     .select('id, content, source_title, source_author, language, translation')
     .eq('is_curated', true)
@@ -35,7 +42,7 @@ export async function fetchCuratedSentences(language?: 'en' | 'ko') {
 }
 
 export async function fetchSentenceById(id: string): Promise<CuratedSentence | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sentences')
     .select('id, content, source_title, source_author, language, translation')
     .eq('id', id)
