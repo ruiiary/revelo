@@ -12,6 +12,7 @@ import {
   type PracticeLog,
 } from '@/lib/storage'
 import { fetchCuratedSentences, type CuratedSentence } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 
 // ─── Types ────────────────────────────────────────
 
@@ -36,11 +37,29 @@ interface ScrapItem {
 
 // ─── Component ────────────────────────────────────
 
+const KakaoIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M10 2C5.582 2 2 4.836 2 8.32c0 2.18 1.376 4.1 3.46 5.253l-.882 3.276a.25.25 0 0 0 .376.27L9.1 14.6A9.7 9.7 0 0 0 10 14.64c4.418 0 8-2.836 8-6.32S14.418 2 10 2Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 export default function NotebookPage() {
+  const { user, signIn } = useAuth()
+  const [signingIn, setSigningIn] = useState(false)
   const [tab, setTab] = useState<Tab>('scraps')
   const [wrongItems, setWrongItems] = useState<WrongItem[]>([])
   const [scrapItems, setScrapItems] = useState<ScrapItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  async function handleKakaoLogin() {
+    setSigningIn(true)
+    await signIn()
+  }
 
   useEffect(() => {
     const scraps = getScraps().sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -137,6 +156,22 @@ export default function NotebookPage() {
             {wrongItems.length > 0 && <TabCount>{wrongItems.length}</TabCount>}
           </TabBtn>
         </TabRow>
+
+        {/* 비로그인 유저 카카오 연동 배너 */}
+        {!user && (
+          <LoginBanner>
+            <LoginBannerText>
+              <LoginBannerTitle>기록을 안전하게 보관하세요</LoginBannerTitle>
+              <LoginBannerDesc>
+                카카오로 로그인하면 필사 기록과 스크랩이 계정에 백업됩니다
+              </LoginBannerDesc>
+            </LoginBannerText>
+            <LoginBannerBtn onClick={handleKakaoLogin} disabled={signingIn}>
+              <KakaoIcon />
+              {signingIn ? '이동 중...' : '로그인'}
+            </LoginBannerBtn>
+          </LoginBanner>
+        )}
 
         {loading && <StatusText>불러오는 중...</StatusText>}
 
@@ -392,4 +427,59 @@ const RetryLink = styled.a`
   white-space: nowrap;
   cursor: pointer;
   flex-shrink: 0;
+`
+
+const LoginBanner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-muted);
+  border-left: 3px solid var(--accent-sand);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+`
+
+const LoginBannerText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+`
+
+const LoginBannerTitle = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-primary);
+`
+
+const LoginBannerDesc = styled.span`
+  font-size: 11px;
+  color: var(--ink-tertiary);
+  line-height: 1.5;
+`
+
+const LoginBannerBtn = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  background: #fee500;
+  color: #191919;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `

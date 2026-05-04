@@ -1,4 +1,4 @@
-const CACHE_NAME = 'revelo-v1'
+const CACHE_NAME = 'revelo-v2'
 
 const PRECACHE_URLS = [
   '/',
@@ -44,13 +44,8 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // 정적 자원: Cache-first
-  if (
-    event.request.destination === 'image' ||
-    event.request.destination === 'font' ||
-    event.request.destination === 'style' ||
-    event.request.destination === 'script'
-  ) {
+  // 정적 자원(이미지·폰트만): Cache-first. JS/CSS는 Next.js가 관리하므로 제외
+  if (event.request.destination === 'image' || event.request.destination === 'font') {
     event.respondWith(
       caches.match(event.request).then(
         (cached) =>
