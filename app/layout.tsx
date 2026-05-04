@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Noto_Sans_KR, Noto_Serif_KR, Playfair_Display } from 'next/font/google'
 import StyledComponentsRegistry from '@/lib/registry'
+import AuthProvider from '@/components/AuthProvider'
 import PwaInit from '@/components/PwaInit'
 import './globals.css'
 
@@ -58,7 +59,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${notoSansKR.variable} ${notoSerifKR.variable} ${playfairDisplay.variable}`}
     >
       <body>
-        <StyledComponentsRegistry>{children}</StyledComponentsRegistry>
+        <StyledComponentsRegistry>
+          <AuthProvider>{children}</AuthProvider>
+        </StyledComponentsRegistry>
         <PwaInit />
       </body>
     </html>

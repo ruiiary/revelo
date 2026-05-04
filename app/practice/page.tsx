@@ -467,7 +467,9 @@ function PracticeContent() {
           )}
           {step === 'complete' && (
             <BtnRow>
-              <SecondaryBtn onClick={() => router.push('/dashboard')}>홈으로</SecondaryBtn>
+              {!sentenceId && (
+                <SecondaryBtn onClick={() => router.push('/dashboard')}>홈으로</SecondaryBtn>
+              )}
               <PrimaryBtn onClick={handleNext}>{sentenceId ? '홈으로' : '다음 문장'}</PrimaryBtn>
             </BtnRow>
           )}

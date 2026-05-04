@@ -49,6 +49,3 @@ docs
 .claude
 CLAUDE.md
 AGENTS.md
-supabase/
-supabase
-supabase/.env*
