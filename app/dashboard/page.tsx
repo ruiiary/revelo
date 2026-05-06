@@ -5,6 +5,7 @@ import styled from 'styled-components'
 import AppLayout from '@/components/layout/AppLayout'
 import SentenceCard from '@/components/ui/SentenceCard'
 import { fetchCuratedSentences, type CuratedSentence } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 import {
   getLanguage,
   getStreak,
@@ -206,6 +207,7 @@ const EmptyMsg = styled.p`
 // ─── Component ────────────────────────────────────
 
 export default function DashboardPage() {
+  const { hydrated } = useAuth()
   const [sentences, setSentences] = useState<CuratedSentence[]>([])
   const [language, setLanguage] = useState<Language>('en')
   const [streak, setStreak] = useState(0)
@@ -218,7 +220,7 @@ export default function DashboardPage() {
     setLanguage(lang)
     setStreak(getStreak())
     setStats(getTotalStats())
-  }, [])
+  }, [hydrated])
 
   useEffect(() => {
     setLoading(true)

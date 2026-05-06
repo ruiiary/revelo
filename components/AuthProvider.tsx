@@ -13,6 +13,7 @@ import { migrateToSupabase, hydrateFromSupabase } from '@/lib/migration'
 interface AuthContextValue {
   user: User | null
   loading: boolean
+  hydrated: boolean
   signIn: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -20,6 +21,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
+  hydrated: false,
   signIn: async () => {},
   signOut: async () => {},
 })
@@ -31,6 +33,7 @@ export function useAuth() {
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     // 초기 세션 복구
@@ -46,7 +49,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       if (nextUser) {
         migrateToSupabase(nextUser.id)
           .then(() => hydrateFromSupabase(nextUser.id))
+          .then(() => setHydrated(true))
           .catch(console.error)
+      } else {
+        setHydrated(true)
       }
     })
 
@@ -63,7 +69,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, hydrated, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )
