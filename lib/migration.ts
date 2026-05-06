@@ -1,5 +1,4 @@
 import { getBooks, getSentences, getPracticeLogs, getScraps } from './storage'
-import type { Book, Sentence, PracticeLog, Scrap } from './storage'
 import {
   syncUserBooks,
   syncUserSentences,
@@ -58,13 +57,6 @@ export async function migrateToSupabase(userId: string): Promise<void> {
   markMigrated(userId)
 }
 
-function mergeById<T extends { id: string }>(local: T[], remote: T[]): T[] {
-  const map = new Map<string, T>()
-  for (const item of local) map.set(item.id, item)
-  for (const item of remote) map.set(item.id, item) // DB가 source of truth
-  return Array.from(map.values())
-}
-
 function writeLocal(key: string, value: unknown): void {
   if (typeof window === 'undefined') return
   try {
@@ -75,8 +67,8 @@ function writeLocal(key: string, value: unknown): void {
 }
 
 /**
- * 로그인 시마다 Supabase 데이터를 localStorage에 병합한다.
- * 기기 간 통계 동기화를 위해 migration 이후 항상 실행된다.
+ * 로그인 시마다 Supabase 데이터로 localStorage를 덮어씌운다.
+ * 카카오 로그인 후 DB가 단일 source of truth가 된다.
  */
 export async function hydrateFromSupabase(userId: string): Promise<void> {
   const [remoteBooks, remoteSentences, remoteLogs, remoteScraps] = await Promise.all([
@@ -86,8 +78,8 @@ export async function hydrateFromSupabase(userId: string): Promise<void> {
     fetchUserScraps(userId),
   ])
 
-  writeLocal('revelo_books', mergeById<Book>(getBooks(), remoteBooks))
-  writeLocal('revelo_sentences', mergeById<Sentence>(getSentences(), remoteSentences))
-  writeLocal('revelo_practice_logs', mergeById<PracticeLog>(getPracticeLogs(), remoteLogs))
-  writeLocal('revelo_scraps', mergeById<Scrap>(getScraps(), remoteScraps))
+  writeLocal('revelo_books', remoteBooks)
+  writeLocal('revelo_sentences', remoteSentences)
+  writeLocal('revelo_practice_logs', remoteLogs)
+  writeLocal('revelo_scraps', remoteScraps)
 }
