@@ -5,7 +5,13 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import styled, { keyframes, css } from 'styled-components'
 import AppLayout from '@/components/layout/AppLayout'
 import Icon from '@/components/ui/Icon'
-import { fetchCuratedSentences, fetchSentenceById, type CuratedSentence } from '@/lib/supabase'
+import {
+  fetchCuratedSentences,
+  fetchSentenceById,
+  syncUserPracticeLogs,
+  type CuratedSentence,
+} from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 import {
   getSentenceById,
   addSentence,
@@ -47,6 +53,7 @@ const STEP_LABEL = ['읽기', '덮기', '쓰기', '비교', '완료']
 function PracticeContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { user } = useAuth()
 
   const sentenceId = searchParams.get('sentenceId')
   const isLocal = searchParams.get('local') === 'true'
@@ -188,7 +195,12 @@ function PracticeContent() {
     setCorrect(result)
     setAccuracy(acc)
     setScrapped(isScrapped(sentence.id))
-    addPracticeLog({ sentence_id: sentence.id, user_input: userInput, is_correct: result })
+    const log = addPracticeLog({
+      sentence_id: sentence.id,
+      user_input: userInput,
+      is_correct: result,
+    })
+    if (user) syncUserPracticeLogs(user.id, [log]).catch(console.error)
     setStep('compare')
   }
 
