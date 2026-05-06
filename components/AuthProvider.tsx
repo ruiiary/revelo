@@ -8,7 +8,7 @@ import {
   signInWithKakao,
   signOut as supabaseSignOut,
 } from '@/lib/supabase'
-import { migrateToSupabase } from '@/lib/migration'
+import { migrateToSupabase, hydrateFromSupabase } from '@/lib/migration'
 
 interface AuthContextValue {
   user: User | null
@@ -44,7 +44,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       setUser(nextUser)
       // 첫 로그인 시 마이그레이션 실행
       if (nextUser) {
-        migrateToSupabase(nextUser.id).catch(console.error)
+        migrateToSupabase(nextUser.id)
+          .then(() => hydrateFromSupabase(nextUser.id))
+          .catch(console.error)
       }
     })
 

@@ -127,3 +127,41 @@ export async function syncUserScraps(userId: string, scraps: Scrap[]): Promise<v
     )
   if (error) throw error
 }
+
+// ─── User Data Fetch (기기 간 동기화에 사용) ──────
+
+export async function fetchUserBooks(userId: string): Promise<Book[]> {
+  const { data, error } = await getClient()
+    .from('user_books')
+    .select('id, title, author, language, created_at')
+    .eq('user_id', userId)
+  if (error) throw error
+  return (data ?? []) as Book[]
+}
+
+export async function fetchUserSentences(userId: string): Promise<Sentence[]> {
+  const { data, error } = await getClient()
+    .from('user_sentences')
+    .select('id, book_id, content, page, language, is_curated, created_at')
+    .eq('user_id', userId)
+  if (error) throw error
+  return (data ?? []) as Sentence[]
+}
+
+export async function fetchUserPracticeLogs(userId: string): Promise<PracticeLog[]> {
+  const { data, error } = await getClient()
+    .from('user_practice_logs')
+    .select('id, sentence_id, user_input, is_correct, practiced_at')
+    .eq('user_id', userId)
+  if (error) throw error
+  return (data ?? []) as PracticeLog[]
+}
+
+export async function fetchUserScraps(userId: string): Promise<Scrap[]> {
+  const { data, error } = await getClient()
+    .from('user_scraps')
+    .select('id, sentence_id, collection_name, created_at')
+    .eq('user_id', userId)
+  if (error) throw error
+  return (data ?? []) as Scrap[]
+}
