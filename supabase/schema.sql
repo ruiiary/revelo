@@ -57,3 +57,8 @@ create policy "anon can read curated sentences"
   on sentences for select
   to anon
   using (is_curated = true);
+
+create policy "authenticated can read curated sentences"
+  on sentences for select
+  to authenticated
+  using (is_curated = true);
