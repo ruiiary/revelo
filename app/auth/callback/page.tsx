@@ -1,15 +1,14 @@
 'use client'
 
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getClient } from '@/lib/supabase'
 
-export default function AuthCallbackPage() {
+function AuthCallbackInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
   useEffect(() => {
-    // Supabase가 OAuth 실패 시 error 파라미터와 함께 리다이렉트
     if (searchParams.get('error')) {
       router.replace('/')
       return
@@ -29,19 +28,26 @@ export default function AuthCallbackPage() {
     }
   }, [router, searchParams])
 
+  return null
+}
+
+const pageStyle = {
+  minHeight: '100dvh',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'var(--bg-base)',
+  color: 'var(--ink-secondary)',
+  fontSize: '15px',
+} as const
+
+export default function AuthCallbackPage() {
   return (
-    <div
-      style={{
-        minHeight: '100dvh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-base)',
-        color: 'var(--ink-secondary)',
-        fontSize: '15px',
-      }}
-    >
+    <div style={pageStyle}>
       로그인 중...
+      <Suspense>
+        <AuthCallbackInner />
+      </Suspense>
     </div>
   )
 }
